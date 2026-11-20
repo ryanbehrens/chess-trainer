@@ -1,3 +1,4 @@
+import { pkey } from '../profile/store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Board from '../components/Board';
 import { lastMoveOf, numbered, replay } from '../components/common';
@@ -8,14 +9,14 @@ const MASTERED = 3; // perfect runs needed to mark a line mastered
 
 function loadProgress() {
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+    return JSON.parse(localStorage.getItem(pkey(STORE_KEY))) || {};
   } catch {
     return {};
   }
 }
 function saveProgress(p) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(p));
+    localStorage.setItem(pkey(STORE_KEY), JSON.stringify(p));
   } catch {
     /* storage unavailable — progress just won't persist */
   }

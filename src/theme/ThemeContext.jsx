@@ -1,3 +1,4 @@
+import { pkey } from '../profile/store';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Chessboard, defaultBoardStyle, defaultPieces } from 'react-chessboard';
 import { DEFAULT_SETTINGS, PIECE_FX, resolveTheme } from './themes';
@@ -8,14 +9,14 @@ const ThemeCtx = createContext(null);
 export function ThemeProvider({ children }) {
   const [settings, setSettings] = useState(() => {
     try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORE_KEY)) };
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(pkey(STORE_KEY))) };
     } catch {
       return DEFAULT_SETTINGS;
     }
   });
   useEffect(() => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(settings));
+      localStorage.setItem(pkey(STORE_KEY), JSON.stringify(settings));
     } catch {
       /* storage unavailable — style just won't persist */
     }

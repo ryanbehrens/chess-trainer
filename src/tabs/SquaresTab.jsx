@@ -1,3 +1,4 @@
+import { pkey } from '../profile/store';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ThemedBoard } from '../theme/ThemeContext';
 
@@ -8,14 +9,14 @@ const LENGTHS = [10, 20, 30, 0]; // 0 = endless practice
 
 function loadStats() {
   try {
-    return { best: {}, history: [], squares: {}, ...JSON.parse(localStorage.getItem(STORE_KEY)) };
+    return { best: {}, history: [], squares: {}, ...JSON.parse(localStorage.getItem(pkey(STORE_KEY))) };
   } catch {
     return { best: {}, history: [], squares: {} };
   }
 }
 function saveStats(s) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(s));
+    localStorage.setItem(pkey(STORE_KEY), JSON.stringify(s));
   } catch {
     /* storage unavailable */
   }

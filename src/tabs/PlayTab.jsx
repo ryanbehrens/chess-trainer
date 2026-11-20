@@ -1,3 +1,6 @@
+import { deleteGame, pkey, saveGame } from '../profile/store';
+import { requestAnalysis, useGameRecord } from '../analysis/analyze';
+import { ReviewSummary } from '../analysis/GameReview';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Board from '../components/Board';
 import { CapturedRow, MoveList, materialOf, materialSummary, replay, gameResult, lastMoveOf, uciToSan } from '../components/common';
@@ -81,12 +84,12 @@ function Clock({ ms, running, flagged }) {
   );
 }
 
-export default function PlayTab({ onAnalyze }) {
+export default function PlayTab({ onAnalyze, onReview, profileId }) {
   const [sans, setSans] = useState([]);
   const [playerColor, setPlayerColor] = useState('w');
   const [levelId, setLevelIdState] = useState(() => {
     try {
-      const saved = +localStorage.getItem(LEVEL_KEY);
+      const saved = +localStorage.getItem(pkey(LEVEL_KEY));
       return BOT_LEVELS.some((l) => l.id === saved) ? saved : 4;
     } catch {
       return 4;
@@ -95,14 +98,14 @@ export default function PlayTab({ onAnalyze }) {
   const setLevelId = (id) => {
     setLevelIdState(id);
     try {
-      localStorage.setItem(LEVEL_KEY, String(id));
+      localStorage.setItem(pkey(LEVEL_KEY), String(id));
     } catch {
       /* storage unavailable — level just won't be remembered */
     }
   };
   const [tcId, setTcIdState] = useState(() => {
     try {
-      return tcById(localStorage.getItem(TC_KEY)).id;
+      return tcById(localStorage.getItem(pkey(TC_KEY))).id;
     } catch {
       return 'none';
     }
@@ -116,6 +119,11 @@ export default function PlayTab({ onAnalyze }) {
   const [thinking, setThinking] = useState(false);
   const [hint, setHint] = useState(null);
   const [viewPly, setViewPly] = useState(null); // null = live position
+  const [resigned, setResigned] = useState(false);
+  const [confirmResign, setConfirmResign] = useState(false);
+  const [savedId, setSavedId] = useState(null); // saved record of the finished game
+  const gameMeta = useRef({ id: Math.random().toString(36).slice(2), hints: 0, takebacks: 0, started: Date.now() });
+  const { record: savedRecord, progress: reviewProgress } = useGameRecord(profileId, savedId);
   const bot = getEngine('bot');
   const genRef = useRef(0); // bumps on new game / undo to drop stale bot moves
 
@@ -134,7 +142,45 @@ export default function PlayTab({ onAnalyze }) {
         return flagged === playerColor ? `⏱ You ran out of time — ${level.name} wins` : `⏱ ${level.name} ran out of time — you win!`;
       })()
     : null;
-  const result = gameResult(game) ?? timeoutResult;
+  const result = gameResult(game) ?? timeoutResult ?? (resigned ? `🏳 You resigned — ${level.name} wins` : null);
+
+  // Save finished games to this player's history and analyze them in the background.
+  useEffect(() => {
+    if (!result || savedId || !sans.some((_, i) => (i % 2 === 0 ? 'w' : 'b') === playerColor)) return;
+    let outcome = 'draw';
+    let reason = result.replace(/^[^A-Za-z]+/, '');
+    if (game.isCheckmate()) {
+      outcome = game.turn() === playerColor ? 'loss' : 'win';
+      reason = 'Checkmate';
+    } else if (resigned) {
+      outcome = 'loss';
+      reason = 'Resigned';
+    } else if (flagged) {
+      outcome = result.startsWith('Draw') ? 'draw' : flagged === playerColor ? 'loss' : 'win';
+      reason = outcome === 'draw' ? 'Draw on time' : 'Time ran out';
+    }
+    const bookInfo = lookupBook(sans);
+    const record = {
+      id: gameMeta.current.id,
+      profileId,
+      date: Date.now(),
+      duration: Date.now() - gameMeta.current.started,
+      sans,
+      playerColor,
+      levelId: level.id,
+      tc: gameTc.id,
+      outcome,
+      reason,
+      opening: bookInfo.best ? bookInfo.best.line.openingName : null,
+      hints: gameMeta.current.hints,
+      takebacks: gameMeta.current.takebacks,
+      analysis: null,
+    };
+    saveGame(record);
+    setSavedId(record.id);
+    requestAnalysis(record);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
   const book = useMemo(() => lookupBook(sans), [sans]);
   const mat = useMemo(() => materialOf(viewGame), [viewGame]);
   const botColor = playerColor === 'w' ? 'b' : 'w';
@@ -227,7 +273,7 @@ export default function PlayTab({ onAnalyze }) {
   function setTcId(id) {
     setTcIdState(id);
     try {
-      localStorage.setItem(TC_KEY, id);
+      localStorage.setItem(pkey(TC_KEY), id);
     } catch {
       /* storage unavailable */
     }
@@ -243,6 +289,10 @@ export default function PlayTab({ onAnalyze }) {
     setGameTc(tc);
     clock.current = freshClock(tc);
     setFlagged(null);
+    setResigned(false);
+    setConfirmResign(false);
+    setSavedId(null);
+    gameMeta.current = { id: Math.random().toString(36).slice(2), hints: 0, takebacks: 0, started: Date.now() };
     bot.stop();
     bot.newGame();
     setThinking(false);
@@ -254,6 +304,13 @@ export default function PlayTab({ onAnalyze }) {
 
   function undo() {
     genRef.current++;
+    gameMeta.current.takebacks++;
+    if (savedId) {
+      // Taking back after the game ended reopens it, so the saved result no longer stands.
+      deleteGame(profileId, savedId);
+      setSavedId(null);
+      gameMeta.current.id = Math.random().toString(36).slice(2);
+    }
     if (clock.current.since != null) clock.current.since = Date.now(); // clock keeps the times already used
     bot.stop();
     setThinking(false);
@@ -269,6 +326,7 @@ export default function PlayTab({ onAnalyze }) {
   }
 
   async function getHint() {
+    gameMeta.current.hints++;
     const res = await getEngine('coach').search(game.fen(), { depth: 16 });
     if (!res) return;
     const [san] = uciToSan(game.fen(), [res.bestmove], 1);
@@ -309,6 +367,8 @@ export default function PlayTab({ onAnalyze }) {
       </div>
 
       <aside className="panel">
+        {savedRecord && <ReviewSummary record={savedRecord} progress={reviewProgress} onOpen={() => onReview(savedRecord.id)} />}
+
         <div className="card">
           <h3>Play vs Stockfish</h3>
           <div className="pick-label">Bot strength</div>
@@ -354,11 +414,20 @@ export default function PlayTab({ onAnalyze }) {
             <button className="btn primary" onClick={() => newGame('b')}>New game as Black</button>
           </div>
           <div className="btn-row">
-            <button className="btn" onClick={undo} disabled={sans.length === 0}>↶ Take back</button>
+            <button className="btn" onClick={undo} disabled={sans.length === 0 || resigned || !!flagged}>↶ Take back</button>
             <button className="btn" onClick={getHint} disabled={!!result || game.turn() !== playerColor}>💡 Hint</button>
             <button className="btn" onClick={() => onAnalyze(sans, playerColor)} disabled={sans.length === 0}>
               🔍 Review in Coach
             </button>
+            {!result && sans.length > 0 &&
+              (confirmResign ? (
+                <>
+                  <button className="btn danger" onClick={() => { genRef.current++; bot.stop(); setThinking(false); setResigned(true); setConfirmResign(false); }}>Yes, resign</button>
+                  <button className="btn" onClick={() => setConfirmResign(false)}>Keep playing</button>
+                </>
+              ) : (
+                <button className="btn" onClick={() => setConfirmResign(true)}>🏳 Resign</button>
+              ))}
           </div>
         </div>
 
