@@ -315,3 +315,38 @@ kbd { background: #323743; border: 1px solid var(--border); border-bottom-width:
 .clock .tick { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: clock-tick 1s steps(2) infinite; }
 @keyframes clock-tick { 50% { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .clock .tick { animation: none; } }
+
+/* ── Picker tiles (bot level, time control) ── */
+.pick-label { font-size: 13px; color: var(--muted); margin: 10px 0 6px; }
+.tile-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 7px; border-radius: 9px;
+  background: #2d313b; border: 1px solid var(--border); color: var(--text); transition: transform .12s, border-color .12s, background .12s; min-width: 0; }
+.tile:hover { transform: translateY(-2px); border-color: #4b5262; background: #333845; }
+.tile.active { border-color: var(--accent); background: rgba(91,157,255,.14); box-shadow: 0 0 0 1px var(--accent) inset; }
+.tile-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tile-sub { font-size: 10.5px; color: var(--muted); }
+
+.level-tile .tile-icon { font-size: 26px; line-height: 1.1; color: hsl(var(--hue) 70% 62%); text-shadow: 0 0 10px hsla(var(--hue), 80%, 55%, .35); }
+.level-tile.active { border-color: hsl(var(--hue) 70% 58%); background: hsla(var(--hue), 70%, 50%, .14); box-shadow: 0 0 0 1px hsl(var(--hue) 70% 58%) inset; }
+.pips { display: flex; gap: 2px; margin-top: 3px; }
+.pips i { width: 5px; height: 5px; border-radius: 1px; background: #444b59; }
+.pips i.on { background: hsl(var(--hue) 70% 58%); }
+
+.tile-grid.clocks { grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.tc-tile { padding: 7px 2px 6px; }
+.tc-icon { width: 30px; height: 30px; overflow: visible; }
+.tc-icon .face { fill: #1b1e25; stroke: var(--c); stroke-width: 2; }
+.tc-icon .wedge { fill: var(--c); opacity: .45; }
+.tc-icon .mark { stroke: #8a91a0; stroke-width: 1.5; }
+.tc-icon .hand { stroke: #fff; stroke-width: 2; stroke-linecap: round; }
+.tc-icon .hub { fill: #fff; }
+.tc-icon .inf { fill: none; stroke: var(--c); stroke-width: 2.4; }
+.tc-icon .inc circle { fill: var(--c); }
+.tc-icon .inc text { font-size: 8.5px; font-weight: 800; fill: #111; }
+.tc-untimed { --c: #9aa0ad; }
+.tc-bullet { --c: #f97316; }
+.tc-blitz { --c: #facc15; }
+.tc-rapid { --c: #4ade80; }
+.tc-classical { --c: #60a5fa; }
+.tc-tile.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); box-shadow: 0 0 0 1px var(--c) inset; }
+.tc-tile .tile-sub { color: var(--c); }

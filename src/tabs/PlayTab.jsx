@@ -34,6 +34,44 @@ function fmtClock(ms) {
   return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(sec).padStart(2, '0')}`;
 }
 
+// Level graphics: pieces climb in rank as the bot gets stronger.
+const LEVEL_ICON = ['♟', '♞', '♝', '♜', '♛', '♚', '🏆', '🤖'];
+const LEVEL_SHORT = ['Beginner', 'Novice', 'Casual', 'Club', 'Strong', 'Expert', 'Master', 'Max'];
+const LEVEL_HUE = [140, 115, 90, 65, 40, 20, 0, 280];
+
+/** A little clock face: the colored wedge is the starting time (out of an hour), the badge is the increment. */
+function ClockIcon({ tc }) {
+  if (!tc.min) {
+    return (
+      <svg className="tc-icon" viewBox="0 0 40 40" aria-hidden>
+        <circle cx="20" cy="20" r="17" className="face" />
+        <path d="M11 20c0-4 5-4 9 0s9 4 9 0-5-4-9 0-9 4-9 0z" className="inf" />
+      </svg>
+    );
+  }
+  const frac = Math.min(tc.min / 60, 0.999);
+  const ang = frac * 2 * Math.PI;
+  const x = 20 + 15 * Math.sin(ang), y = 20 - 15 * Math.cos(ang);
+  const wedge = `M20 20 L20 5 A15 15 0 ${frac > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)} Z`;
+  return (
+    <svg className="tc-icon" viewBox="0 0 40 40" aria-hidden>
+      <circle cx="20" cy="20" r="17" className="face" />
+      <path d={wedge} className="wedge" />
+      {[0, 90, 180, 270].map((d) => (
+        <line key={d} x1="20" y1="4.5" x2="20" y2="7" className="mark" transform={`rotate(${d} 20 20)`} />
+      ))}
+      <line x1="20" y1="20" x2={x.toFixed(2)} y2={y.toFixed(2)} className="hand" />
+      <circle cx="20" cy="20" r="1.8" className="hub" />
+      {tc.inc > 0 && (
+        <g className="inc">
+          <circle cx="32" cy="8" r="7.5" />
+          <text x="32" y="10.8" textAnchor="middle">+{tc.inc}</text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
 function Clock({ ms, running, flagged }) {
   return (
     <span className={`clock ${running ? 'running' : ''} ${ms < 20000 ? 'low' : ''} ${flagged ? 'flagged' : ''}`}>
@@ -273,30 +311,43 @@ export default function PlayTab({ onAnalyze }) {
       <aside className="panel">
         <div className="card">
           <h3>Play vs Stockfish</h3>
-          <label className="field">
-            Bot strength
-            <select value={levelId} onChange={(e) => setLevelId(+e.target.value)}>
-              {BOT_LEVELS.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.id}. {l.name} ({l.approx})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Time control
-            <select value={tcId} onChange={(e) => setTcId(e.target.value)}>
-              {['Untimed', 'Bullet', 'Blitz', 'Rapid', 'Classical'].map((g) => (
-                <optgroup key={g} label={g}>
-                  {TIME_CONTROLS.filter((t) => t.group === g).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label ?? `${t.id} — ${t.min} min${t.inc ? ` + ${t.inc} sec/move` : ''}`}
-                    </option>
+          <div className="pick-label">Bot strength</div>
+          <div className="tile-grid levels">
+            {BOT_LEVELS.map((l) => (
+              <button
+                key={l.id}
+                className={`tile level-tile ${l.id === levelId ? 'active' : ''}`}
+                style={{ '--hue': LEVEL_HUE[l.id - 1] }}
+                onClick={() => setLevelId(l.id)}
+                title={`Level ${l.id}: ${l.name} (${l.approx})`}
+              >
+                <span className="tile-icon">{LEVEL_ICON[l.id - 1]}</span>
+                <span className="tile-name">{LEVEL_SHORT[l.id - 1]}</span>
+                <span className="tile-sub">{l.approx}</span>
+                <span className="pips">
+                  {BOT_LEVELS.map((x) => (
+                    <i key={x.id} className={x.id <= l.id ? 'on' : ''} />
                   ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="pick-label">Time control</div>
+          <div className="tile-grid clocks">
+            {TIME_CONTROLS.map((t) => (
+              <button
+                key={t.id}
+                className={`tile tc-tile tc-${t.group.toLowerCase()} ${t.id === tcId ? 'active' : ''}`}
+                onClick={() => setTcId(t.id)}
+                title={t.label ?? `${t.group}: ${t.min} min${t.inc ? ` + ${t.inc} sec per move` : ''}`}
+              >
+                <ClockIcon tc={t} />
+                <span className="tile-name">{t.min ? t.id : 'None'}</span>
+                <span className="tile-sub">{t.group}</span>
+              </button>
+            ))}
+          </div>
           {tc.id !== gameTc.id && <div className="muted small">Starts with your next new game.</div>}
           <div className="btn-row">
             <button className="btn primary" onClick={() => newGame('w')}>New game as White</button>
